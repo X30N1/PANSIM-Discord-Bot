@@ -3,54 +3,67 @@ import os
 import pytz
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from discord.ext import tasks
 
 # Importujemy prywatny token, ukryty w .env z oczywistych powodów
 load_dotenv()
 bot = discord.Bot(intents=discord.Intents.all())
 
 # Deklarujemy zmienne
-guild = bot.get_guild(1181311403164958742) # Numer ID serwera
-botchannel = bot.get_channel(1353825094211735633)
-admin = guild.get_role(1181311635449720832)
 REMINDER_TIME = [timedelta(days=1), timedelta(hours=2)]
 
 # Zmienna do śledzenia czy powiadomienia były wysyłane
+guild = None
+botchannel = None
+admin = None
 sent_reminders = {}
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity="Patrzy jak farba schnie")
+    global guild, botchannel, admin
+    await bot.change_presence(activity=discord.Game(name="Patrzy jak farba schnie"))
+    guild = bot.get_guild(1181311403164958742) # Numer ID serwera
+    botchannel = bot.get_channel(1353825094211735633)
+    admin = guild.get_role(1181311635449720832)
+
     await botchannel.send("Uruchomiono bota!")
     print("Uruchomiono bota")
 
-@bot.loop(minutes=10)
+@tasks.loop(minutes=10)
 async def check_reminders():
     now = datetime.now(timezone.utc)
-    events = guild.fetch_scheduled_events()
-    clear_old_reminders(events)
+    events = await guild.fetch_scheduled_events()
+    await clear_old_reminders(events)
+    
     for event in events:
         if event.status == discord.ScheduledEventStatus.scheduled:
             time_until_start = event.start_time - now
-        for reminder in REMINDER_TIME:
-            time_diff = abs(time_until_start - reminder)
-        
-            if time_diff < timedelta(minutes=5) and (event.id, reminder) not in sent_reminders:
-                await send_reminder(event, reminder)
-                sent_reminders[(event.id, reminder)] = True
+            for reminder in REMINDER_TIME:
+                time_diff = abs(time_until_start - reminder)
+                if time_diff <= timedelta(minutes=5) and (event.id, reminder) not in sent_reminders:
+                    await send_reminder(event, reminder)
+                    sent_reminders[(event.id, reminder)] = True
 
-async def clear_old_reminders(passed_events):
-    events = passed_events
-    for event in sent_reminders:
-        if event.id not in events:
-            for time in REMINDER_TIME:
-                sent_reminders.pop((event.id, time))
+async def clear_old_reminders(current_events):
+    current_event_ids = {event.id for event in current_events}
+    to_remove = []
+    
+    for (event_id, reminder_time) in sent_reminders.keys():
+        if event_id not in current_event_ids:
+            to_remove.append((event_id, reminder_time))
+    
+    for key in to_remove:
+        sent_reminders.pop(key, None)
 
 async def send_reminder(passed_event, reminder):
-    event = passed_event
     days = reminder.days
     hours, remainder = divmod(reminder.seconds, 3600)
-    minutes = divmod(remainder, 60)
-    await botchannel.send(f"@everyone \nUwaga! Wydarzenie {event.name} rozpoczyna się za {days} dni, {hours} godzin i {minutes} minut!")
+    minutes, _ = divmod(remainder, 60)
+    await botchannel.send(f"@everyone \nUwaga! Wydarzenie {passed_event.name} rozpoczyna się za {days} dni, {hours} godzin i {minutes} minut!")
+
+@check_reminders.before_loop
+async def before_check_reminders():
+    await bot.wait_until_ready()
 
 @bot.slash_command(name="test-czasu", description="Podaj obecny czas wg. skryptu (DEBUG)")
 async def print_time(ctx: discord.ApplicationContext):
@@ -58,11 +71,40 @@ async def print_time(ctx: discord.ApplicationContext):
 
 @bot.slash_command(name="info-dump", description="Zwraca czas odpowiedzi i jaki czas widzi (w CET/CEST)")
 async def print_time(ctx: discord.ApplicationContext):
-    await ctx.respond(f" Czas odpowiedzi: {round(bot.latency())} \n Czas rejestrowany przez bota: {datetime.now(pytz.timezone("Europe/Warsaw"))}")
+    await ctx.respond(f" Czas odpowiedzi: {str(round(bot.latency * 1000))}ms\nCzas rejestrowany przez bota: {datetime.now(pytz.timezone('Europe/Warsaw'))}")
 
 @bot.slash_command(name="check-time", description="Sprawdź, kiedy dostaniesz powiadomienie o wydarzeniach")
 async def print_time(ctx: discord.ApplicationContext):
-    await ctx.respond(f"{REMINDER_TIME}")
+    await ctx.respond(f"{str(REMINDER_TIME)}")
+
+@bot.slash_command(name="events", description="Pokaż wszystkie nadchodzące wydarzenia")
+async def list_events(ctx: discord.ApplicationContext):
+    events = await guild.fetch_scheduled_events()
+    if not events:
+        await ctx.respond("Brak nadchodzących wydarzeń.")
+        return
+        
+    response = "**Nadchodzące wydarzenia:**\n\n"
+    now = datetime.now(timezone.utc)
+    warsaw_tz = pytz.timezone('Europe/Warsaw')
+    
+    for event in events:
+        if event.status == discord.ScheduledEventStatus.scheduled:
+            start_time = event.start_time.astimezone(warsaw_tz)
+            response += f"**{event.name}**\n"
+            
+            response += "Powiadomienia:\n"
+            for reminder in REMINDER_TIME:
+                reminder_time = start_time - reminder
+                if reminder_time > datetime.now(warsaw_tz):
+                    response += f"- {reminder_time.strftime('%d.%m.%Y %H:%M')}"
+                    if (event.id, reminder) in sent_reminders:
+                        response += " (wysłano)\n"
+                    else:
+                        response += " (oczekuje)\n"
+            response += "\n"
+    
+    await ctx.respond(response)
 
 check_reminders.start()
 
