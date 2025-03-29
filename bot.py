@@ -23,7 +23,7 @@ async def on_ready():
     await botchannel.send("Uruchomiono bota!")
     print("Uruchomiono bota")
 
-@bot.loop(minutes=30)
+@bot.loop(minutes=10)
 async def check_reminders():
     now = datetime.now(timezone.utc)
     events = guild.fetch_scheduled_events()
@@ -63,5 +63,7 @@ async def print_time(ctx: discord.ApplicationContext):
 @bot.slash_command(name="check-time", description="Sprawdź, kiedy dostaniesz powiadomienie o wydarzeniach")
 async def print_time(ctx: discord.ApplicationContext):
     await ctx.respond(f"{REMINDER_TIME}")
+
+check_reminders.start()
 
 bot.run(os.getenv("TOKEN"))
