@@ -27,6 +27,7 @@ async def on_ready():
 async def check_reminders():
     now = datetime.now(timezone.utc)
     events = guild.fetch_scheduled_events()
+    clear_old_reminders(events)
     for event in events:
         if event.status == discord.ScheduledEventStatus.scheduled:
             time_until_start = event.start_time - now
@@ -43,7 +44,7 @@ async def clear_old_reminders(passed_events):
         if event.id not in events:
             for time in REMINDER_TIME:
                 sent_reminders.pop((event.id, time))
-                
+
 async def send_reminder(passed_event, reminder):
     event = passed_event
     days = reminder.days
