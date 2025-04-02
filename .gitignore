@@ -1,3 +1,6 @@
 # DO NOT get the private token
 .env
 venv
+
+# vscode config settings for venv
+.vscode

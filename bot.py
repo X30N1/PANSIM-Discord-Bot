@@ -41,7 +41,8 @@ async def check_reminders():
             for reminder in REMINDER_TIME:
                 time_diff = abs(time_until_start - reminder)
                 if time_diff <= timedelta(minutes=5) and (event.id, reminder) not in sent_reminders:
-                    await send_reminder(event, reminder)
+                    event_channel = guild.get_channel(event.location.value.id)
+                    await send_reminder(event, reminder, event_channel)
                     sent_reminders[(event.id, reminder)] = True
 
 async def clear_old_reminders(current_events):
@@ -55,33 +56,51 @@ async def clear_old_reminders(current_events):
     for key in to_remove:
         sent_reminders.pop(key, None)
 
-async def send_reminder(passed_event, reminder):
+async def send_reminder(passed_event, reminder, event_channel):
     days = reminder.days
     hours, remainder = divmod(reminder.seconds, 3600)
     minutes, _ = divmod(remainder, 60)
-    await botchannel.send(f"@everyone \nUwaga! Wydarzenie {passed_event.name} rozpoczyna się za {days} dni, {hours} godzin i {minutes} minut!")
+    await botchannel.send(f"@everyone \nUwaga! Wydarzenie **{passed_event.name}** rozpoczyna się za **{days} dni, {hours} godzin i {minutes} minut!** na kanale **{event_channel}**")
 
 @check_reminders.before_loop
 async def before_check_reminders():
     await bot.wait_until_ready()
 
-@bot.slash_command(name="test-czasu", description="Podaj obecny czas wg. skryptu (DEBUG)")
-async def print_time(ctx: discord.ApplicationContext):
-    await ctx.respond(datetime.now(timezone.utc))
-
 @bot.slash_command(name="info-dump", description="Zwraca czas odpowiedzi i jaki czas widzi (w CET/CEST)")
 async def print_time(ctx: discord.ApplicationContext):
-    await ctx.respond(f" Czas odpowiedzi: {str(round(bot.latency * 1000))}ms\nCzas rejestrowany przez bota: {datetime.now(pytz.timezone('Europe/Warsaw'))}")
+    await ctx.respond(f" Czas odpowiedzi: **{str(round(bot.latency * 1000))}**ms\nCzas rejestrowany przez bota: **{datetime.now(pytz.timezone('Europe/Warsaw'))}**")
 
-@bot.slash_command(name="check-time", description="Sprawdź, kiedy dostaniesz powiadomienie o wydarzeniach")
-async def print_time(ctx: discord.ApplicationContext):
-    await ctx.respond(f"{str(REMINDER_TIME)}")
+@bot.slash_command(name="get-users", description="Wypisz listę osób obecnych na kanale (tylko podczas spotkania)")
+async def get_users(ctx: discord.ApplicationContext):
+    events = await guild.fetch_scheduled_events()
+    if not events:
+        await ctx.respond("**Brak nadchodzących wydarzeń.**")
+
+    active_event = False
+    for event in events:
+        if event.status != discord.ScheduledEventStatus.active:
+            continue
+        else:
+            active_event = True
+            event_channel = guild.get_channel(event.location.value.id)
+            user_list = event_channel.members
+
+    if not active_event:
+        await ctx.respond("Nie ma obecnie aktywnego wydarzenia!")
+    else:
+        await ctx.respond(user_list)
+
+@bot.slash_command(name="change-time", description="Komenda do zmiany czasu")
+async def change_time(ctx: discord.ApplicationContext, dni: int, godziny: int):
+    global REMINDER_TIME 
+    REMINDER_TIME = [timedelta(days=dni), timedelta(hours=godziny)]
+    await ctx.respond(f"Ustawiono powiadomienia na **{dni}** dni oraz **{godziny}** godzin")
 
 @bot.slash_command(name="events", description="Pokaż wszystkie nadchodzące wydarzenia")
 async def list_events(ctx: discord.ApplicationContext):
     events = await guild.fetch_scheduled_events()
     if not events:
-        await ctx.respond("Brak nadchodzących wydarzeń.")
+        await ctx.respond("**Brak nadchodzących wydarzeń.**")
         return
         
     response = "**Nadchodzące wydarzenia:**\n\n"
@@ -91,8 +110,9 @@ async def list_events(ctx: discord.ApplicationContext):
     for event in events:
         if event.status == discord.ScheduledEventStatus.scheduled:
             start_time = event.start_time.astimezone(warsaw_tz)
+            event_channel = guild.get_channel(event.location.value.id) # Nie można event.value bo zwraca generyczny obiekt
             response += f"**{event.name}**\n"
-            
+            response += f"Na kanale: **{event_channel}**\n"
             response += "Powiadomienia:\n"
             for reminder in REMINDER_TIME:
                 reminder_time = start_time - reminder
