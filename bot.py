@@ -90,11 +90,15 @@ async def get_users(ctx: discord.ApplicationContext):
     else:
         await ctx.respond(user_list)
 
-@bot.slash_command(name="change-time", description="Komenda do zmiany czasu")
+@bot.slash_command(name="change-time", description="Komenda do zmiany czasu [TYLKO DLA ADMINISTRATORÓW]")
 async def change_time(ctx: discord.ApplicationContext, dni: int, godziny: int):
-    global REMINDER_TIME 
-    REMINDER_TIME = [timedelta(days=dni), timedelta(hours=godziny)]
-    await ctx.respond(f"Ustawiono powiadomienia na **{dni}** dni oraz **{godziny}** godzin")
+    if admin in ctx.author.roles:
+        global REMINDER_TIME 
+        REMINDER_TIME[0] = timedelta(days=dni)
+        REMINDER_TIME[1] = timedelta(hours=godziny)
+        await ctx.respond(f"Ustawiono powiadomienia na **{dni}** dni oraz **{godziny}** godzin")
+    else:
+        await ctx.respond("Tylko administratorzy mogą wykonać tą komendę!")
 
 @bot.slash_command(name="events", description="Pokaż wszystkie nadchodzące wydarzenia")
 async def list_events(ctx: discord.ApplicationContext):
