@@ -91,7 +91,7 @@ async def get_users(ctx: discord.ApplicationContext):
         await ctx.respond(user_list)
 
 @bot.slash_command(name="change-time", description="Komenda do zmiany czasu [TYLKO DLA ADMINISTRATORÓW]")
-async def change_time(ctx: discord.ApplicationContext, dni: int, godziny: int):
+async def change_time(ctx: discord.ApplicationContext, dni: discord.Option(int), godziny: discord.Option(int)): # type: ignore
     if admin in ctx.author.roles:
         try:
             global REMINDER_TIME 
