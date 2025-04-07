@@ -21,10 +21,10 @@ sent_reminders = {}
 @bot.event
 async def on_ready():
     global guild, botchannel, admin
-    await bot.change_presence(activity=discord.Game(name="Patrzy jak farba schnie"))
+    await bot.change_presence(activity=discord.Game(name="Patrzy jak farba schnie")) # Status
     guild = bot.get_guild(1181311403164958742) # Numer ID serwera
-    botchannel = bot.get_channel(1353825094211735633)
-    admin = guild.get_role(1181311635449720832)
+    botchannel = bot.get_channel(1353825094211735633) # Numer ID kanału ogłoszeniowego
+    admin = guild.get_role(1181311635449720832) # Numer ID roli administratora
 
     await botchannel.send("Uruchomiono bota!")
     print("Uruchomiono bota")
@@ -60,7 +60,7 @@ async def send_reminder(passed_event, reminder, event_channel):
     days = reminder.days
     hours, remainder = divmod(reminder.seconds, 3600)
     minutes, _ = divmod(remainder, 60)
-    await botchannel.send(f"@everyone \nUwaga! Wydarzenie **{passed_event.name}** rozpoczyna się za **{days} dni, {hours} godzin i {minutes} minut!** na kanale **{event_channel}**")
+    await botchannel.send(f"@everyone \nUwaga! Wydarzenie **{passed_event.name}** rozpoczyna się za **{days} dni, {hours} godziny i {minutes} minuty!** na kanale **{event_channel}**")
 
 @check_reminders.before_loop
 async def before_check_reminders():
@@ -97,7 +97,7 @@ async def change_time(ctx: discord.ApplicationContext, dni: discord.Option(int),
             global REMINDER_TIME 
             REMINDER_TIME[0] = timedelta(days=dni)
             REMINDER_TIME[1] = timedelta(hours=godziny)
-            await ctx.respond(f"Ustawiono powiadomienia na **{dni}** dni oraz **{godziny}** godzin")
+            await ctx.respond(f"Ustawiono powiadomienia na **{dni}** dni oraz **{godziny}** godziny!")
         except Exception:
             await ctx.respond(f"Wystąpił błąd: {Exception}")
     else:
